@@ -20,7 +20,7 @@ setuptools.setup(
     long_description=long_desc,
     long_description_content_type="text/markdown",
     license=license_str,
-    url="https://github.com/D-K-E/PointCarver",
+    url="https://github.com/D-K-E/webcam-detector",
     packages=setuptools.find_packages(
         exclude=["tests", "*.tests", "*.tests.*", "tests.*",
                  "docs", ".gitignore", "README.md"]
@@ -28,9 +28,8 @@ setuptools.setup(
     test_suite="tests",
     install_requires=[
         "numpy",
-        "scipy",
-        "pillow",
-        # "PySide2"
+        "PySide2"
+        "opencv-python"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
