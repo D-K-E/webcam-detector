@@ -4,6 +4,7 @@
 
 import numpy as np
 import cv2
+import os
 
 
 class SimpleCascadeDetector:
@@ -11,26 +12,42 @@ class SimpleCascadeDetector:
 
     def __init__(self, modelPath: str,
                  imagePath: str):
-        self.image = cv2.imread(imagePath)
+        if imagePath is not None:
+            self.image = cv2.imread(imagePath)
+            self.grayimg = cv2.cvtColor(self.image.copy(), cv2.COLOR_BGR2GRAY)
+        else:
+            self.image = None
+            self.grayimg = None
         self.modelPath = modelPath
-        self.classifier = cv2.CascadeClassifier(self.modelPath)
-        self.grayimg = cv2.cvtColor(self.image.copy(), cv2.COLOR_BGR2GRAY)
+
         self.scaleFactor = 1.1
-        self.minNeighbors = 5,
+        self.minNeighbors = 5
         self.minSize = (30, 30)
 
     def detectObjects(self):
         "Detect faces on image"
-        return self.classifier.detectMultiScale(self.grayimg,
-                                                scaleFactor=self.scaleFactor,
-                                                minNeighbors=self.minNeighbors,
-                                                minSize=self.minSize)
+        print(self.modelPath)
+        self.classifier = cv2.CascadeClassifier()
+        retval = self.classifier.load(self.modelPath)
+        if not retval:
+            print(self.modelPath)
+            if os.path.isfile(self.modelPath):
+                print('file exists')
+            else:
+                print('file not exist')
+        objects = self.classifier.detectMultiScale(self.grayimg,
+                                                   self.scaleFactor,
+                                                   self.minNeighbors,
+                                                   )
+
+        return objects
 
     def drawDetected(self, color=(0, 255, 0)):
         "Draw faces that are detected"
         drawImg = self.image.copy()
-        for face in self.detectObjects():
-            xcoord, ycoord, width, height = face
+        objects = self.detectObjects()
+        for obj in objects:
+            xcoord, ycoord, width, height = obj
             cv2.rectangle(drawImg,
                           (xcoord, ycoord),
                           (xcoord+width,
@@ -38,3 +55,11 @@ class SimpleCascadeDetector:
                           color,
                           thickness=2)
         return drawImg
+
+    def setImage(self, img: np.ndarray) -> None:
+        "Set image to classifier"
+        assert img.dtype == 'uint8'
+        imcopy = img.copy()
+        self.image = imcopy
+        self.grayimg = cv2.cvtColor(imcopy, cv2.COLOR_BGR2GRAY)
+        return
