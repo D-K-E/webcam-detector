@@ -39,3 +39,9 @@ Here is a list of shortcuts:
 - `ctrl+a`: starts the web cam feed
 - `ctrl+e`: stops the web cam feed
 - `ctrl+f`: saves the web cam image
+
+
+## Roadmap
+
+- Custom models for facial key points
+- Custom models for other objects
