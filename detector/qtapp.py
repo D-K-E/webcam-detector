@@ -10,6 +10,7 @@ from PySide2 import QtGui, QtCore, QtWidgets
 from detector.cascadeDetector import SimpleCascadeDetector
 from PIL import Image
 from detector.assets.ui.interface import Ui_MainWindow
+import datetime
 
 
 class AppWindowInit(Ui_MainWindow):
@@ -45,31 +46,54 @@ class AppWindowFinal(AppWindowInit):
         # object types
         self.objTypes = {
             'faceParts': {
-            "Eye": os.path.join(modelsDir, 'cascadeEye.xml'),
-            "Right Eye": os.path.join(modelsDir, 'cascadeRightEye.xml'),
-            "Left Eye": os.path.join(modelsDir, 'cascadeLeftEye.xml'),
+                "Eye": os.path.join(modelsDir, 'cascadeEye.xml'),
+                "Right Eye": os.path.join(modelsDir, 'cascadeRightEye.xml'),
+                "Left Eye": os.path.join(modelsDir, 'cascadeLeftEye.xml'),
+                "Human Smile": os.path.join(modelsDir,
+                                        'cascadeSmile.xml'),
             },
             # "Nose": os.path.join(modelsDir, 'cascadeEye.xml'),
             "Frontal Cat Face": os.path.join(modelsDir,
                                              'cascadeFrontalCatFace.xml'),
-            "Lower Body": os.path.join(modelsDir, 'cascadeLowerBody.xml'),
-            "Upper Body": os.path.join(modelsDir, 'cascadeUpperBody.xml'),
-            "Full Body": os.path.join(modelsDir, 'cascadeFullBody.xml'),
             "Frontal Human Face": os.path.join(modelsDir,
                                                'cascadeFrontalFace.xml'),
             "Profile Human Face": os.path.join(modelsDir,
                                                'cascadeProfileFace.xml'),
-            "Human Smile": os.path.join(modelsDir,
-                                        'cascadeSmile.xml'),
+            
             "Frontal Facial Key Points": "",
         }
-        combovals = list(self.objTypes.keys())
         self.facePart = self.objTypes['faceParts']
-        self.cascadeClassifiers = combovals[:len(combovals)-2]
-        self.kerasClassifiers = combovals[len(combovals)-2:]
+        self.modelPath = {}
+        for key, val in self.objTypes.items():
+            if key == "faceParts":
+                for k, v in self.facePart.items():
+                    self.modelPath[k] = v
+            else:
+                self.modelPath[key] = val
+        self.cascadeClassifiers = [
+            k for k, v in self.modelPath.items() if 'cascade' in v
+        ]
+        self.kerasClassifiers = [
+            k for k, v in self.modelPath.items() if 'keras' in v
+        ]
+        combovals = list(self.modelPath.keys())
         self.objectTypes.addItems(combovals)
         self.scene = QtWidgets.QGraphicsScene()
         self.frame = None
+
+        # shortcuts
+        self.closeShortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence("ctrl+w"), self.centralwidget
+        )
+        self.startShortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence("ctrl+a"), self.centralwidget
+        )
+        self.stopShortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence("ctrl+e"), self.centralwidget
+        )
+        self.captureShortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence("ctrl+f"), self.centralwidget
+        )
 
         # buttons
         self.startFeedBtn.clicked.connect(self.startFeed)
@@ -77,6 +101,12 @@ class AppWindowFinal(AppWindowInit):
         self.captureImageBtn.clicked.connect(self.saveCapture)
         self.objectTypes.currentTextChanged.connect(
             self.restartFeed)
+
+        # shortcut wiring
+        self.closeShortcut.activated.connect(self.quickClose)
+        self.startShortcut.activated.connect(self.startFeed)
+        self.stopShortcut.activated.connect(self.stopFeed)
+        self.captureShortcut.activated.connect(self.saveCapture)
 
     def restartFeed(self):
         "Restart the feed"
@@ -104,35 +134,58 @@ class AppWindowFinal(AppWindowInit):
     def chooseClassifier(self, choice: str):
         "Instantiate a classifier based on choice"
         if choice in self.cascadeClassifiers:
-            modelPath = self.objTypes[choice]
+            modelPath = self.modelPath[choice]
             classifier = SimpleCascadeDetector(modelPath,
                                                imagePath=None)
         elif choice in self.kerasClassifiers:
             classifer = None
         return classifier
 
+    def detectFaceInFrame(self, frame: np.ndarray):
+        "Detect face in frame and output detected faces"
+        choice = "Frontal Human Face"
+        classifier = self.chooseClassifier(choice)
+        classifier.setImage(frame.copy())
+        return classifier.detectObjects()
+
     def detectObjectInFrame(self, frame: np.ndarray):
         "Detect object in frame"
         choice = self.objectTypes.currentText()
-        classifier = self.chooseClassifier(choice)
-        classifier.setImage(frame)
-        return classifier.drawDetected()
+        if choice in self.facePart:
+            classifier = self.chooseClassifier(choice)
+            faces = self.detectFaceInFrame(frame)
+            image = frame.copy()
+            for face in faces:
+                xcoord, ycoord, width, height = face
+                faceImg = image[ycoord:ycoord+height,
+                                xcoord:xcoord+width]
+                classifier.setImage(faceImg)
+                detectedImg = classifier.drawDetected()
+                image[ycoord:ycoord+height,
+                      xcoord:xcoord+width] = detectedImg
+            return image
+        else:
+            classifier = self.chooseClassifier(choice)
+            classifier.setImage(frame)
+            return classifier.drawDetected()
 
     def displayImage(self):
         "Display the frame image on scene after detection"
         self.scene.clear()
+        gw, gh = self.graphicsView.width(), self.graphicsView.height()
         capt, self.frame = self.videoCapture.read()
         self.frame = self.detectObjectInFrame(self.frame)
         frame = self.frame.copy()
+        frame = cv2.resize(frame, dsize=(gw, gh), 
+                           interpolation=cv2.INTER_LINEAR)
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.flip(frame, 1)
         qimage = QtGui.QImage(frame,
-                              frame.shape[1], # width/columns
-                              frame.shape[0], # height/rows
+                              frame.shape[1],  # width/columns
+                              frame.shape[0],  # height/rows
                               frame.strides[0],
                               QtGui.QImage.Format_RGB888)
         qpixmap = QtGui.QPixmap.fromImage(qimage)
-        gw, gh = self.graphicsView.width(), self.graphicsView.height()
         self.scene.setSceneRect(0, 0, gw, gh)
         self.scene.addPixmap(qpixmap)
         self.graphicsView.setScene(self.scene)
@@ -141,13 +194,8 @@ class AppWindowFinal(AppWindowInit):
     def saveCapture(self):
         "Save capture to file"
         path = os.path.join(self.assetsdir, "output")
-        saveName = QtWidgets.QFileDialog.getSaveFileName(self.centralwidget,
-                                                         "Save Image",
-                                                         path,
-                                                         "Images (*.png)"
-                                                         )
-        if isinstance(saveName, list): # if there are several filters
-            saveName = saveName[0]
+        todayStr = str(datetime.date.today())
+        saveName = os.path.join(path, "capture-" + todayStr + ".png")
         #
         cv2.imwrite(saveName, self.frame)
 
@@ -171,6 +219,10 @@ class AppWindowFinal(AppWindowInit):
             event.ignore()
             #
         return
+
+    def quickClose(self):
+        "Quick close"
+        sys.exit(0)
 
 
 if __name__ == '__main__':

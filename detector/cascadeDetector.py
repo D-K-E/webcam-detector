@@ -26,11 +26,9 @@ class SimpleCascadeDetector:
 
     def detectObjects(self):
         "Detect faces on image"
-        print(self.modelPath)
         self.classifier = cv2.CascadeClassifier()
         retval = self.classifier.load(self.modelPath)
         if not retval:
-            print(self.modelPath)
             if os.path.isfile(self.modelPath):
                 print('file exists')
             else:
